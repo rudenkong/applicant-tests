@@ -55,7 +55,10 @@ select count (*) from items
 | Italy                     | #                             |
 
 ```sql
--- result here
+SELECT country_name, COUNT(DISTINCT customer_id) AS CustomerCountDistinct
+FROM Customers
+WHERE country_code IN ('IT', 'FR')
+GROUP BY country_name;
 ```
 
 ### 2) ТОП 10 покупателей по расходам
@@ -71,7 +74,13 @@ select count (*) from items
 | #                      | #           |
 
 ```sql
--- result here
+SELECT customer_name, SUM(item_price * quantity) AS Revenue
+FROM Orders
+JOIN Items ON Orders.item_id = Items.item_id
+JOIN Customers ON Orders.customer_id = Customers.customer_id
+GROUP BY customer_id, customer_name
+ORDER BY Revenue DESC
+LIMIT 10;
 ```
 
 ### 3) Общая выручка USD по странам, если нет дохода, вернуть NULL
@@ -85,7 +94,16 @@ select count (*) from items
 | Tanzania                  | #                     |
 
 ```sql
--- result here
+SELECT country_name,
+       CASE
+           WHEN SUM(item_price * quantity) IS NULL THEN NULL
+           ELSE SUM(item_price * quantity)
+       END AS RevenuePerCountry
+FROM Orders
+JOIN Items ON Orders.item_id = Items.item_id
+JOIN Customers ON Orders.customer_id = Customers.customer_id
+JOIN Countries ON Customers.country_code = Countries.country_code
+GROUP BY country_name;
 ```
 
 ### 4) Самый дорогой товар, купленный одним покупателем
@@ -101,7 +119,17 @@ select count (*) from items
 | #                | #                  | #                         |
 
 ```sql
--- result here
+SELECT customer_id, customer_name, item_name AS MostExpensiveItemName
+FROM Orders
+JOIN Items ON Orders.item_id = Items.item_id
+JOIN Customers ON Orders.customer_id = Customers.customer_id
+WHERE (customer_id, item_price) IN (
+    SELECT customer_id, MAX(item_price)
+    FROM Orders
+    JOIN Items ON Orders.item_id = Items.item_id
+    JOIN Customers ON Orders.customer_id = Customers.customer_id
+    GROUP BY customer_id
+);
 ```
 
 ### 5) Ежемесячный доход
@@ -117,7 +145,11 @@ select count (*) from items
 | #                     | #                 |
 
 ```sql
--- result here
+SELECT TO_CHAR(date_time, 'MM') AS Month, SUM(item_price * quantity) AS TotalRevenue
+FROM Orders
+JOIN Items ON Orders.item_id = Items.item_id
+GROUP BY TO_CHAR(date_time, 'MM')
+ORDER BY TO_CHAR(date_time, 'MM');
 ```
 
 ### 6) Найти дубликаты
@@ -127,7 +159,8 @@ select count (*) from items
 Вы должны их найти и вернуть количество дубликатов.
 
 ```sql
--- result here
+SELECT COUNT(*) - COUNT(DISTINCT date_time, customer_id, item_id) AS DuplicateCount
+FROM Orders;
 ```
 
 ### 7) Найти "важных" покупателей
@@ -146,7 +179,15 @@ select count (*) from items
 | #                     | #                             |
 
 ```sql
--- result here
+SELECT customer_id, COUNT(*) AS TotalOrdersCount
+FROM (
+    SELECT customer_id, MIN(date_time) AS first_order_date
+    FROM Orders
+    GROUP BY customer_id
+) subquery
+JOIN Orders ON subquery.customer_id = Orders.customer_id AND Orders.date_time > subquery.first_order_date
+GROUP BY customer_id
+ORDER BY TotalOrdersCount DESC;
 ```
 
 ### 8) Найти покупателей с "ростом" за последний месяц
@@ -166,5 +207,16 @@ select count (*) from items
 | #                     | #                 |
 
 ```sql
--- result here
+SELECT customer_id, SUM(item_price * quantity) AS TotalRevenue
+FROM Orders
+JOIN Items ON Orders.item_id = Items.item_id
+WHERE date_time >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)
+GROUP BY customer_id
+HAVING SUM(item_price * quantity) > (
+    SELECT AVG(SUM(item_price * quantity))
+    FROM Orders
+    JOIN Items ON Orders.item_id = Items.item_id
+    WHERE date_time < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)
+    GROUP BY customer_id
+);
 ```
